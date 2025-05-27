@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-lang-key="title">MediaWiki 分类交集工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="/images/favicon.ico">
+<style>
+    /* 新增表格行交互样式 */
+    #results-table-body tr {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    #results-table-body tr:hover {
+        background-color: #f8fafc; /* bg-slate-50 */
+    }
+    /* 保持原有链接样式 */
+    .page-link {
+        color: #2563eb; /* text-blue-600 */
+        text-decoration: underline;
+    }
+    .page-link:hover {
+        color: #1e40af; /* text-blue-800 */
+    }
+    .min-w-full {
+        min-width: 800px; /* 设置最小宽度保证表格内容显示 */
+    }
+    #results-table-body td {
+        padding: 1rem; /* 从 py-2 增加到 py-4 */
+        vertical-align: top; /* 顶部对齐 */
+    }
+    .page-link {
+        word-break: break-word; /* 长标题自动换行 */
+    }
+</style>
+    <style>
+        /* Additional styles for language switcher */
+        .lang-switcher button {
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem; /* rounded-md */
+            transition: background-color 0.2s;
+        }
+        .lang-switcher button.active {
+            background-color: #3B82F6; /* bg-blue-600 */
+            color: white;
+        }
+        .lang-switcher button:not(.active) {
+            background-color: #E5E7EB; /* bg-gray-200 */
+            color: #374151; /* text-gray-700 */
+        }
+        .lang-switcher button:not(.active):hover {
+            background-color: #D1D5DB; /* bg-gray-300 */
+        }
+        /* Ensure focus states are subtle but clear */
+        input:focus, button:focus {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            box-shadow: 0 0 0 2px #2563eb; /* ring-blue-500 */
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Language Switcher -->
+        <div class="lang-switcher flex justify-end mb-4 space-x-2">
+            <button id="lang-en" data-lang="en">English</button>
+            <button id="lang-zh" data-lang="zh" class="active">中文</button>
+        </div>
+
+        <!-- Header Section -->
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2" data-lang-key="headerTitle">MediaWiki 分类交集工具</h1>
+            <p class="text-lg text-gray-600" data-lang-key="headerSubtitle">查找同时属于多个分类的页面</p>
+        </header>
+
+        <!-- Usage Instructions Section -->
+        <section id="usage-instructions-section" class="mb-6">
+            <button id="toggle-instructions-button" class="w-full text-left text-blue-600 hover:text-blue-800 focus:outline-none p-3 bg-blue-50 rounded-lg shadow hover:shadow-md transition-all flex justify-between items-center">
+                <span id="toggle-instructions-text" data-lang-key="showUsageInstructions">显示使用说明</span>
+                <svg id="instructions-arrow" class="w-5 h-5 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="usage-instructions-content" class="hidden bg-white rounded-lg shadow-md mt-2 p-6 border border-blue-100">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4" data-lang-key="usageInstructionsTitle">使用说明</h3>
+                <ol class="list-decimal list-inside space-y-3 text-gray-700">
+                    <li data-lang-key="usageInstructionsStep1"><strong>连接站点：</strong> 在 “MediaWiki 站点连接” 部分输入目标 MediaWiki 站点的 <code>api.php</code> 文件的完整 URL (例如：<code>https://en.wikipedia.org/w/api.php</code>)，然后点击 “连接并加载分类” 按钮。</li>
+                    <li data-lang-key="usageInstructionsStep2"><strong>选择分类：</strong> 连接成功后，可在 “分类选择” 部分浏览或搜索分类。点击分类名称将其添加到 “已选分类” 列表。您可以选择多个分类。</li>
+                    <li data-lang-key="usageInstructionsStep3"><strong>查找交集：</strong> 选择完所有目标分类后，点击 “查找所有已选分类中的页面” 按钮。工具将开始获取并计算这些分类下的页面交集。</li>
+                    <li data-lang-key="usageInstructionsStep4"><strong>查看结果：</strong> 处理完成后，“交集结果” 部分将显示同时属于所有已选分类的页面列表。如果结果过多，将提供分页导航。</li>
+                </ol>
+            </div>
+        </section>
+
+        <!-- Site Input Section -->
+        <section id="site-input-section" class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6" data-lang-key="siteInputTitle">MediaWiki 站点连接</h2>
+            <div class="flex flex-col md:flex-row gap-4 items-end">
+                <div class="flex-grow">
+                    <label for="api-url" class="block text-sm font-medium text-gray-700 mb-1" data-lang-key="apiUrlLabel">MediaWiki API URL</label>
+                    <input
+                        type="url"
+                        id="api-url"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                        placeholder="例如：https://en.wikipedia.org/w/api.php"
+                        data-lang-key-placeholder="apiUrlPlaceholder"
+                        value="https://www.araceae.wiki/api.php">
+                    <p class="mt-1 text-xs text-gray-500" data-lang-key="apiUrlHelp">请输入 MediaWiki 站点的 api.php 完整 URL</p>
+                </div>
+                <div class="flex-shrink-0">
+                    <button
+                        id="connect-button"
+                        class="w-full md:w-auto px-6 py-2.5 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                        data-lang-key="connectButton">
+                        连接并加载分类
+                    </button>
+                </div>
+            </div>
+            <div id="connection-status" class="mt-4">
+                <!-- Status messages will be inserted here by JS -->
+            </div>
+        </section>
+
+        <!-- Category Selection Section -->
+        <section id="category-selection-section" class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6" data-lang-key="categorySelectionTitle">分类选择</h2>
+            <div class="flex flex-col lg:flex-row gap-6">
+                <!-- Category Browser -->
+                <div class="w-full lg:w-2/3">
+                    <div class="mb-4">
+                        <label for="category-search" class="block text-sm font-medium text-gray-700 mb-1" data-lang-key="searchCategoriesLabel">搜索分类</label>
+                        <input
+                            type="text"
+                            id="category-search"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                            data-lang-key-placeholder="searchCategoriesPlaceholder"
+                            placeholder="输入以搜索分类..."
+                            disabled>
+                    </div>
+                    <div id="categories-container" class="border border-gray-300 rounded-md h-96 overflow-auto p-3 bg-gray-50">
+                        <div id="categories-loading" class="flex justify-center items-center h-full hidden">
+                            <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600"></div>
+                        </div>
+                        <div id="categories-placeholder" class="flex justify-center items-center h-full text-gray-500" data-lang-key="categoriesPlaceholder">
+                            连接到 MediaWiki 站点以加载分类
+                        </div>
+                        <ul id="categories-list" class="categories-list hidden">
+    <!-- Categories will be added here dynamically -->
+</ul>
+                    </div>
+                    <div id="load-more-container" class="mt-3 text-center hidden">
+                        <button
+                            id="load-more-button"
+                            class="px-5 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 transition-colors"
+                            data-lang-key="loadMoreButton">
+                            加载更多分类
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Selected Categories -->
+                <div class="w-full lg:w-1/3 mt-6 lg:mt-0">
+                    <h3 class="text-lg font-medium text-gray-700 mb-3" data-lang-key="selectedCategoriesTitle">已选分类</h3>
+                    <div id="selected-categories-container" class="border border-gray-300 rounded-md min-h-[12rem] p-3 bg-gray-50 max-h-96 overflow-y-auto">
+                        <div id="selected-categories-placeholder" class="text-gray-500 text-center py-10" data-lang-key="selectedCategoriesPlaceholder">
+                            未选择任何分类
+                        </div>
+                        <ul id="selected-categories-list" class="selected-categories-list space-y-2">
+                            <!-- Selected categories will be added here dynamically -->
+                        </ul>
+                    </div>
+                    <div class="mt-4">
+                        <button
+                            id="find-intersection-button"
+                            class="w-full px-4 py-3 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            data-lang-key="findIntersectionButton"
+                            disabled>
+                            查找所有已选分类中的页面
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Progress Section -->
+        <section id="progress-section" class="bg-white rounded-lg shadow-lg p-6 mb-8 hidden">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4" data-lang-key="progressTitle">处理请求</h2>
+            <div class="flex items-center mb-2">
+                <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600 mr-3"></div>
+                <div id="progress-status" class="text-gray-700" data-lang-key="progressStatusLoading">加载数据...</div>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+            </div>
+            <div id="progress-details" class="text-sm text-gray-600 mt-2"></div>
+        </section>
+
+        <!-- Results Section -->
+        <section id="results-section" class="bg-white rounded-lg shadow-lg p-6 hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-6">
+                <h2 class="text-2xl font-semibold text-gray-800" data-lang-key="resultsTitle">交集结果</h2>
+                <span id="result-count" class="mt-2 sm:mt-0 px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full"></span>
+            </div>
+            <div id="no-results-message" class="py-10 text-center text-gray-600 hidden text-lg" data-lang-key="noResultsMessage">
+                未找到属于所有已选分类的页面。
+            </div>
+            <div id="results-container">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+    <tr>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-lang-key="pageTitleHeader">
+            页面标题
+        </th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-lang-key="lastModifiedHeader">
+            最后修改时间
+        </th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-lang-key="pageIdHeader">
+            页面ID
+        </th>
+    </tr>
+</thead>
+<tbody id="results-table-body" 
+       class="bg-white divide-y divide-gray-200 [&>tr:nth-child(even)]:bg-gray-50">
+</tbody>
+                        <tbody id="results-table-body" 
+       class="bg-white divide-y divide-gray-200 [&>tr:nth-child(even)]:bg-gray-50">
+                            <!-- Results will be added here dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="pagination-container" class="mt-6 flex justify-center items-center space-x-1">
+                    <!-- Pagination controls will be dynamically created by utils.js -->
+                </div>
+            </div>
+        </section>
+
+        <footer class="text-center mt-12 py-6 border-t border-gray-200">
+            <p class="text-sm text-gray-500" data-lang-key="footerText">MediaWiki 分类交集工具 -  -Copyright &copy; 2025 公子猫</p>
+        </footer>
+    </div>
+
+    <script src="js/locales.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/intersection.js"></script>
+    <script src="js/app.js"></script>
+    <script charset="UTF-8" id="LA_COLLECT" src="//sdk.51.la/js-sdk-pro.min.js"></script>
+<script>LA.init({id:"3LXNtP4gx5ialLZA",ck:"3LXNtP4gx5ialLZA"})</script>
+    <script src="site/js/cs.js"></script>
+</body>
+</html>
